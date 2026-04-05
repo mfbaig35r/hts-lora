@@ -1,0 +1,24 @@
+# MLX-lm LoRA full-dataset config (M4 Pro 24GB)
+model: "bourn23/nvidia-llama-3.1-nemotron-nano-8b-v1-mlx-4bit"
+data: "data/formatted"
+adapter_file: "adapters_full/adapters.safetensors"
+
+# Training — 3000 iters on full 149k dataset (~2.3 hours at 0.37 it/sec)
+batch_size: 1
+iters: 3000
+val_batches: 25
+steps_per_report: 50
+steps_per_eval: 500
+save_every: 500
+learning_rate: 1e-5
+grad_checkpoint: true
+
+# LoRA
+lora_layers: 16
+lora_rank: 16
+lora_alpha: 32
+
+# Data
+max_seq_length: 2048
+mask_prompt: true
+seed: 42
