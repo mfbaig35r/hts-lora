@@ -1,7 +1,7 @@
 # MLX-lm LoRA pilot config (M4 Pro 24GB)
-model: "mlx-community/Llama-3.1-Nemotron-Nano-8B-v1-4bit"
+model: "bourn23/nvidia-llama-3.1-nemotron-nano-8b-v1-mlx-4bit"
 data: "data/formatted"
-adapter_file: "outputs/mlx_pilot/adapters.npz"
+adapter_file: "adapters/adapters.safetensors"
 
 # Training
 batch_size: 1

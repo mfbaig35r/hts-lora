@@ -25,11 +25,11 @@ app = typer.Typer(help="MLX LoRA pilot for HTS classification")
 console = Console()
 
 # Defaults
-DEFAULT_MODEL = "mlx-community/Llama-3.1-Nemotron-Nano-8B-v1-4bit"
+DEFAULT_MODEL = "bourn23/nvidia-llama-3.1-nemotron-nano-8b-v1-mlx-4bit"
 DEFAULT_CONFIG = "configs/train_mlx.yaml"
 DEFAULT_DATA_DIR = Path("data/formatted")
 DEFAULT_PILOT_DIR = Path("data/pilot")
-DEFAULT_OUTPUT_DIR = Path("outputs/mlx_pilot")
+DEFAULT_ADAPTER_DIR = Path("adapters")
 
 TRAIN_SUBSET_SIZE = 5000
 VALID_SUBSET_SIZE = 500
@@ -62,7 +62,7 @@ def convert(
     mlx_dir = Path(mlx_path)
 
     # If using a community pre-quantized model, mlx_lm handles it automatically
-    if model_id.startswith("mlx-community/"):
+    if "/" in model_id and not model_id.startswith("nvidia/"):
         console.print(f"[green]Using pre-quantized community model: {model_id}[/green]")
         console.print("mlx-lm will download and cache automatically during training.")
         return
@@ -73,7 +73,7 @@ def convert(
 
     console.print(f"[bold]Converting {model_id} to MLX format...[/bold]")
     cmd = [
-        sys.executable, "-m", "mlx_lm.convert",
+        sys.executable, "-m", "mlx_lm", "convert",
         "--hf-path", model_id,
         "--mlx-path", str(mlx_dir),
     ]
@@ -177,11 +177,12 @@ def train(
     console.print(f"  Config: {config}")
     console.print(f"  Data: {data_dir}")
 
-    # Ensure output directory exists
-    DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Ensure adapter directory exists
+    DEFAULT_ADAPTER_DIR.mkdir(parents=True, exist_ok=True)
 
     cmd = [
-        sys.executable, "-m", "mlx_lm.lora",
+        sys.executable, "-m", "mlx_lm", "lora",
+        "--train",
         "--config", config,
         "--data", data_dir,
     ]
@@ -194,7 +195,7 @@ def train(
 def generate(
     model_id: str = typer.Option(DEFAULT_MODEL, help="Base model ID"),
     adapter_path: str = typer.Option(
-        str(DEFAULT_OUTPUT_DIR / "adapters.npz"), help="Path to trained adapter"
+        str(DEFAULT_ADAPTER_DIR), help="Path to adapter directory"
     ),
     data_dir: Path = typer.Option(DEFAULT_PILOT_DIR, help="Data directory for test examples"),
     num_examples: int = typer.Option(50, help="Number of examples to generate"),
@@ -208,9 +209,9 @@ def generate(
         console.print("[red]mlx-lm not installed. Run: uv pip install 'hts-lora[mlx]'[/red]")
         raise typer.Exit(1)
 
-    adapter = Path(adapter_path)
-    if not adapter.exists():
-        console.print(f"[red]Adapter not found: {adapter_path}[/red]")
+    adapter_dir = Path(adapter_path)
+    if not (adapter_dir / "adapter_config.json").exists():
+        console.print(f"[red]No adapter_config.json in: {adapter_path}[/red]")
         raise typer.Exit(1)
 
     # Load validation examples
@@ -288,7 +289,7 @@ def generate(
     console.print(table)
 
     # Write full results
-    output_path = DEFAULT_OUTPUT_DIR / "pilot_predictions.jsonl"
+    output_path = Path("outputs/mlx_pilot/pilot_predictions.jsonl")
     _write_jsonl(results, output_path)
     console.print(f"\n[green]Full results written to {output_path}[/green]")
 
