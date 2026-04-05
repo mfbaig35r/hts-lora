@@ -3,7 +3,7 @@ name = "hts-lora"
 version = "0.1.0"
 description = "LoRA fine-tuning pipeline for HTS classification with Llama-3.1-Nemotron-Nano-8B"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "torch>=2.1.0",
     "transformers>=4.40.0",
