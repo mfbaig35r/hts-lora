@@ -157,6 +157,7 @@ class TrainingHyperparams(BaseModel):
     save_steps: int = 200
     seed: int = 42
     bf16: bool = True
+    fp16: bool = False
     gradient_checkpointing: bool = True
     optim: str = "paged_adamw_8bit"
 

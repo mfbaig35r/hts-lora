@@ -88,6 +88,7 @@ def train(config: TrainConfig) -> Path:
         save_total_limit=3,
         seed=hp.seed,
         bf16=hp.bf16,
+        fp16=hp.fp16,
         gradient_checkpointing=hp.gradient_checkpointing,
         optim=hp.optim,
         report_to="none",
