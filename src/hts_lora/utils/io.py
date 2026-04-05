@@ -77,11 +77,14 @@ def create_run_dir(base_dir: str | Path, prefix: str = "run") -> Path:
     run_dir = base / f"{prefix}_{timestamp}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    # Update the 'latest' symlink
+    # Update the 'latest' symlink (safe for multi-process)
     latest = base / "latest"
-    if latest.is_symlink() or latest.exists():
-        latest.unlink()
-    latest.symlink_to(run_dir.name)
+    try:
+        if latest.is_symlink() or latest.exists():
+            latest.unlink()
+        latest.symlink_to(run_dir.name)
+    except (OSError, FileExistsError, FileNotFoundError):
+        pass  # Another process may have raced us
 
     return run_dir
 
