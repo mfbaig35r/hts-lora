@@ -31,6 +31,10 @@ dev = [
     "pytest-cov>=5.0.0",
     "ruff>=0.4.0",
 ]
+mlx = [
+    "mlx>=0.22.0",
+    "mlx-lm>=0.22.0",
+]
 
 [build-system]
 requires = ["hatchling"]

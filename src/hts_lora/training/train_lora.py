@@ -40,8 +40,8 @@ def train(config: TrainConfig) -> Path:
     # Load data
     data_dir = Path(config.data_dir)
     train_records = read_jsonl(data_dir / "train.jsonl")
-    val_records = read_jsonl(data_dir / "val.jsonl")
-    logger.info(f"Data: {len(train_records)} train, {len(val_records)} val examples")
+    val_records = read_jsonl(data_dir / "valid.jsonl")
+    logger.info(f"Data: {len(train_records)} train, {len(val_records)} valid examples")
 
     train_dataset = Dataset.from_list(train_records)
     val_dataset = Dataset.from_list(val_records)

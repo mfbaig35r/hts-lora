@@ -1,7 +1,8 @@
-"""Batch inference with left-padding and progress tracking."""
+"""Batch inference with left-padding and progress tracking (v2 structured text)."""
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +10,8 @@ import torch
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from hts_lora.inference.predict import TaskMode, _parse_response, build_messages
+from hts_lora.inference.parse_output import parse_prediction
+from hts_lora.inference.predict import InputVariant, build_v2_messages
 from hts_lora.utils.io import append_jsonl, read_jsonl
 from hts_lora.utils.logging import get_logger
 
@@ -23,12 +25,12 @@ def batch_predict(
     output_path: str | Path,
     batch_size: int = 8,
     max_new_tokens: int = 512,
-    default_mode: TaskMode = "direct_classify",
+    default_variant: InputVariant = "rich",
 ) -> dict[str, int]:
-    """Run batch inference on a JSONL file.
+    """Run batch inference on a JSONL file using v2 structured text format.
 
     Input JSONL format (each line):
-        {"description": "...", "mode": "...", "candidates": [...], "context": "..."}
+        {"description": "...", "variant": "...", "materials": "...", ...}
 
     Output JSONL format (each line):
         {<input fields>, "prediction": {...}, "raw": "...", "parse_ok": true/false}
@@ -51,13 +53,13 @@ def batch_predict(
     for batch_start in tqdm(range(0, len(records), batch_size), desc="Predicting"):
         batch = records[batch_start : batch_start + batch_size]
         results = _predict_batch(
-            model, tokenizer, batch, max_new_tokens, default_mode
+            model, tokenizer, batch, max_new_tokens, default_variant
         )
 
         for record, result in zip(batch, results):
             output_record = {
                 **record,
-                "prediction": result["parsed"],
+                "prediction": asdict(result["prediction"]),
                 "raw": result["raw"],
                 "parse_ok": result["parse_ok"],
             }
@@ -80,18 +82,20 @@ def _predict_batch(
     tokenizer: AutoTokenizer,
     batch: list[dict[str, Any]],
     max_new_tokens: int,
-    default_mode: TaskMode,
+    default_variant: InputVariant,
 ) -> list[dict[str, Any]]:
     """Run inference on a batch of records."""
     # Build prompts
     prompts = []
     for record in batch:
-        mode = record.get("mode", default_mode)
-        messages = build_messages(
+        variant = record.get("variant", record.get("input_variant", default_variant))
+        messages = build_v2_messages(
             description=record["description"],
-            mode=mode,
-            candidates=record.get("candidates"),
-            context=record.get("context"),
+            variant=variant,
+            materials=record.get("materials"),
+            product_use=record.get("product_use"),
+            country=record.get("country"),
+            glossary_terms=record.get("glossary_terms"),
         )
         text = tokenizer.apply_chat_template(
             messages,
@@ -110,11 +114,6 @@ def _predict_batch(
         max_length=2048,
     ).to(model.device)
 
-    prompt_lengths = [
-        (inputs["attention_mask"][i] == 1).sum().item()
-        for i in range(len(batch))
-    ]
-
     # Generate
     with torch.no_grad():
         outputs = model.generate(
@@ -127,15 +126,14 @@ def _predict_batch(
 
     # Decode each result
     results = []
-    for i, (output_ids, prompt_len) in enumerate(zip(outputs, prompt_lengths)):
-        # For left-padded: generated tokens start after the prompt
-        generated_ids = output_ids[inputs["input_ids"].shape[1]:]
+    for i in range(len(batch)):
+        generated_ids = outputs[i][inputs["input_ids"].shape[1]:]
         raw_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
-        parsed = _parse_response(raw_text)
+        parsed = parse_prediction(raw_text)
         results.append({
-            "parsed": parsed,
+            "prediction": parsed,
             "raw": raw_text,
-            "parse_ok": parsed is not None,
+            "parse_ok": parsed.parse_ok,
         })
 
     return results

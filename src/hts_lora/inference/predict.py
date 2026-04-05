@@ -1,42 +1,66 @@
-"""Single-example inference with JSON parsing and fallbacks."""
+"""Single-example inference for v2 structured text output."""
 
 from __future__ import annotations
 
-import json
-import re
 from typing import Any, Literal
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from hts_lora.inference.parse_output import ParsedPrediction, parse_prediction
 from hts_lora.utils.logging import get_logger
 
 logger = get_logger("inference.predict")
 
-TaskMode = Literal["rerank", "rag_classify", "direct_classify"]
+InputVariant = Literal["rich", "minimal", "glossary_enriched", "materials_only"]
 
 
-def build_messages(
+def build_v2_messages(
     description: str,
-    mode: TaskMode,
-    candidates: list[str] | None = None,
-    context: str | None = None,
+    variant: InputVariant = "rich",
+    materials: str | None = None,
+    product_use: str | None = None,
+    country: str | None = None,
+    glossary_terms: list[dict[str, str]] | None = None,
 ) -> list[dict[str, str]]:
-    """Build the chat messages for a prediction request."""
-    from hts_lora.data.formatters import _SYSTEM_PROMPTS
+    """Build system + user messages matching v2 training format."""
+    from hts_lora.data.formatters import _SYSTEM_PROMPT
 
-    system_prompt = _SYSTEM_PROMPTS[mode]
+    if variant == "rich":
+        parts = [f"Product: {description}"]
+        if materials:
+            parts.append(f"Materials: {materials}")
+        if product_use:
+            parts.append(f"Use: {product_use}")
+        if country:
+            parts.append(f"Country of origin: {country}")
+        user_content = "\n".join(parts)
 
-    if mode == "rerank" and candidates:
-        candidates_str = "\n".join(f"  - {c}" for c in candidates)
-        user_content = f"Product description: {description}\n\nCandidate HTS codes:\n{candidates_str}"
-    elif mode == "rag_classify" and context:
-        user_content = f"Product description: {description}\n\n{context}"
+    elif variant == "minimal":
+        user_content = f"Product: {description}"
+
+    elif variant == "glossary_enriched":
+        parts = [f"Product: {description}"]
+        if glossary_terms:
+            defs = "\n".join(f"- {t['term']}: {t['definition']}" for t in glossary_terms)
+            parts.append(f"\nRelevant trade terms:\n{defs}")
+        user_content = "\n".join(parts)
+
+    elif variant == "materials_only":
+        parts = []
+        if materials:
+            parts.append(f"Materials: {materials}")
+        if product_use:
+            parts.append(f"Use: {product_use}")
+        if country:
+            parts.append(f"Country of origin: {country}")
+        user_content = "\n".join(parts) if parts else f"Product: {description}"
+
     else:
-        user_content = f"Product description: {description}"
+        user_content = f"Product: {description}"
 
     return [
-        {"role": "system", "content": system_prompt},
+        {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": user_content},
     ]
 
@@ -45,21 +69,25 @@ def predict(
     model: AutoModelForCausalLM,
     tokenizer: AutoTokenizer,
     description: str,
-    mode: TaskMode = "direct_classify",
-    candidates: list[str] | None = None,
-    context: str | None = None,
+    variant: InputVariant = "rich",
+    materials: str | None = None,
+    product_use: str | None = None,
+    country: str | None = None,
+    glossary_terms: list[dict[str, str]] | None = None,
     max_new_tokens: int = 512,
-    temperature: float = 0.1,
     do_sample: bool = False,
+    repetition_penalty: float = 1.05,
 ) -> dict[str, Any]:
-    """Run a single prediction and parse the JSON response.
+    """Run a single v2 prediction and parse the structured text response.
 
     Returns a dict with:
-      - parsed: the parsed JSON response (or None if parsing failed)
+      - prediction: ParsedPrediction object
       - raw: the raw generated text
-      - parse_ok: whether JSON parsing succeeded
+      - parse_ok: whether parsing succeeded
     """
-    messages = build_messages(description, mode, candidates, context)
+    messages = build_v2_messages(
+        description, variant, materials, product_use, country, glossary_terms
+    )
 
     # Apply chat template with generation prompt
     text = tokenizer.apply_chat_template(
@@ -82,60 +110,19 @@ def predict(
             **inputs,
             max_new_tokens=max_new_tokens,
             do_sample=do_sample,
-            temperature=temperature,
             pad_token_id=tokenizer.pad_token_id,
-            repetition_penalty=1.05,
+            repetition_penalty=repetition_penalty,
         )
 
     # Decode only the generated tokens
-    generated_ids = outputs[0][inputs["input_ids"].shape[1] :]
+    generated_ids = outputs[0][inputs["input_ids"].shape[1]:]
     raw_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
 
-    # Parse the JSON response
-    parsed = _parse_response(raw_text)
+    # Parse the structured text response
+    parsed = parse_prediction(raw_text)
 
     return {
-        "parsed": parsed,
+        "prediction": parsed,
         "raw": raw_text,
-        "parse_ok": parsed is not None,
+        "parse_ok": parsed.parse_ok,
     }
-
-
-def _parse_response(text: str) -> dict[str, Any] | None:
-    """Try to parse JSON from the model response with multiple fallback strategies."""
-    text = text.strip()
-
-    # Strategy 1: Direct parse
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-
-    # Strategy 2: Extract JSON from markdown code block
-    match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except json.JSONDecodeError:
-            pass
-
-    # Strategy 3: Find the first { ... } block
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError:
-            pass
-
-    # Strategy 4: Try to fix common JSON issues
-    # Trailing comma before closing brace
-    cleaned = re.sub(r",\s*([}\]])", r"\1", text)
-    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError:
-            pass
-
-    logger.warning(f"Failed to parse JSON from response: {text[:200]}")
-    return None

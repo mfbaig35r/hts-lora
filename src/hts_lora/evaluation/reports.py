@@ -1,4 +1,4 @@
-"""Generate evaluation reports: JSON, Markdown, per-chapter breakdown."""
+"""Generate evaluation reports: JSON, Markdown, per-chapter breakdown (v2)."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from typing import Any
 
 from hts_lora.evaluation.error_analysis import analyze_errors
 from hts_lora.evaluation.metrics import compute_metrics
+from hts_lora.inference.parse_output import ParsedPrediction
 from hts_lora.utils.hts_codes import chapter, match_at_level, validate_code
 from hts_lora.utils.io import write_json, write_jsonl
 from hts_lora.utils.logging import get_logger
@@ -15,10 +16,16 @@ from hts_lora.utils.logging import get_logger
 logger = get_logger("evaluation.reports")
 
 
+def _get_hts_code(pred: Any) -> str:
+    """Extract HTS code from ParsedPrediction or dict."""
+    if isinstance(pred, ParsedPrediction):
+        return pred.hts_code or ""
+    return str(pred.get("hts_code", "") or "")
+
+
 def generate_report(
     predictions: list[dict[str, Any]],
     output_dir: str | Path,
-    top_k_values: list[int] | None = None,
 ) -> dict[str, Any]:
     """Generate a full evaluation report.
 
@@ -32,7 +39,7 @@ def generate_report(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Compute metrics
-    metrics = compute_metrics(predictions, top_k_values)
+    metrics = compute_metrics(predictions)
 
     # Error analysis
     errors = analyze_errors(predictions)
@@ -40,18 +47,17 @@ def generate_report(
     # Per-chapter breakdown
     per_chapter = _per_chapter_metrics(predictions)
 
-    # Failures
-    failures = [
-        p for p in predictions
-        if p.get("parse_ok") and p.get("prediction")
-        and not p.get("abstain", False)
-        and p["prediction"].get("predicted_code")
-        and not match_at_level(
-            str(p["prediction"]["predicted_code"]),
-            p["hts_code"],
-            "exact",
-        )
-    ]
+    # Failures: parsed, non-abstain, with a code that doesn't match
+    failures = []
+    for p in predictions:
+        if not p.get("parse_ok") or not p.get("prediction"):
+            continue
+        if p.get("abstain", False):
+            continue
+        pred_code = _get_hts_code(p["prediction"])
+        if pred_code and validate_code(pred_code):
+            if not match_at_level(pred_code, p["hts_code"], "exact"):
+                failures.append(p)
 
     # Assemble report
     report = {
@@ -102,28 +108,22 @@ def _write_markdown_report(report: dict[str, Any], path: Path) -> None:
     lines = [
         "# HTS LoRA Evaluation Report\n",
         "## Overall Metrics\n",
-        f"| Metric | Value |",
-        f"|--------|-------|",
+        "| Metric | Value |",
+        "|--------|-------|",
     ]
 
     metric_display = [
         ("Total examples", metrics.get("total", 0), "d"),
-        ("JSON parse rate", metrics.get("json_parse_rate", 0), ".1%"),
+        ("Parse rate", metrics.get("parse_rate", 0), ".1%"),
         ("Exact match", metrics.get("exact_match", 0), ".3f"),
         ("Chapter match", metrics.get("chapter_match", 0), ".3f"),
         ("Heading match", metrics.get("heading_match", 0), ".3f"),
         ("Subheading match", metrics.get("subheading_match", 0), ".3f"),
         ("Abstain rate (on abstain examples)", metrics.get("abstain_rate", 0), ".3f"),
-        ("Confidence ECE", metrics.get("confidence_ece", 0), ".4f"),
+        ("Hierarchy consistency", metrics.get("hierarchy_consistency", 0), ".3f"),
     ]
     for name, val, fmt in metric_display:
         lines.append(f"| {name} | {val:{fmt}} |")
-
-    # Top-k
-    for k in [1, 3, 5]:
-        key = f"top_{k}_accuracy"
-        if key in metrics:
-            lines.append(f"| Top-{k} accuracy (rerank) | {metrics[key]:.3f} |")
 
     lines.append("")
 
@@ -182,7 +182,7 @@ def compare_runs(
         previous = comparison["runs"][-2]["metrics"]
         comparison["delta"] = {
             key: round(latest.get(key, 0) - previous.get(key, 0), 4)
-            for key in ["exact_match", "chapter_match", "heading_match", "json_parse_rate"]
+            for key in ["exact_match", "chapter_match", "heading_match", "parse_rate"]
         }
 
     return comparison

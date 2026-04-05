@@ -175,8 +175,6 @@ class TrainConfig(BaseModel):
 
 class GenerationConfig(BaseModel):
     max_new_tokens: int = 512
-    temperature: float = 0.1
-    top_p: float = 0.9
     do_sample: bool = False
     repetition_penalty: float = 1.05
 
@@ -188,11 +186,10 @@ class EvalConfig(BaseModel):
     metrics: list[str] = Field(
         default_factory=lambda: [
             "exact_match", "chapter_match", "heading_match",
-            "subheading_match", "top_k_accuracy", "abstain_rate",
-            "json_parse_rate", "confidence_calibration",
+            "subheading_match", "abstain_rate", "parse_rate",
+            "hierarchy_consistency",
         ]
     )
-    top_k_values: list[int] = Field(default_factory=lambda: [1, 3, 5])
     output_dir: str = "outputs/latest/eval"
 
 

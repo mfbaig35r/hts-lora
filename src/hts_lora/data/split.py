@@ -1,4 +1,4 @@
-"""Stratified train/val/test split with leakage prevention.
+"""Stratified train/valid/test split with leakage prevention.
 
 Supports two split modes:
 - "row": Split individual examples (original behavior)
@@ -21,24 +21,24 @@ logger = get_logger("data.split")
 
 
 class DataSplit:
-    """Container for train/val/test splits."""
+    """Container for train/valid/test splits."""
 
     def __init__(
         self,
         train: list[TrainingExample],
-        val: list[TrainingExample],
+        valid: list[TrainingExample],
         test: list[TrainingExample],
     ):
         self.train = train
-        self.val = val
+        self.valid = valid
         self.test = test
 
     def summary(self) -> dict[str, int]:
         return {
             "train": len(self.train),
-            "val": len(self.val),
+            "valid": len(self.valid),
             "test": len(self.test),
-            "total": len(self.train) + len(self.val) + len(self.test),
+            "total": len(self.train) + len(self.valid) + len(self.test),
         }
 
 
@@ -88,7 +88,7 @@ def _ruling_level_split(
         chapter_rulings[chap].append(ruling_num)
 
     train: list[TrainingExample] = []
-    val: list[TrainingExample] = []
+    valid: list[TrainingExample] = []
     test: list[TrainingExample] = []
 
     for chap_key, ruling_nums in chapter_rulings.items():
@@ -106,7 +106,7 @@ def _ruling_level_split(
         for rn in ruling_nums[:n_train]:
             train.extend(ruling_groups[rn])
         for rn in ruling_nums[n_train:n_train + n_val]:
-            val.extend(ruling_groups[rn])
+            valid.extend(ruling_groups[rn])
         for rn in ruling_nums[n_train + n_val:]:
             test.extend(ruling_groups[rn])
 
@@ -114,17 +114,17 @@ def _ruling_level_split(
     train.extend(no_ruling)
 
     rng.shuffle(train)
-    rng.shuffle(val)
+    rng.shuffle(valid)
     rng.shuffle(test)
 
-    split = DataSplit(train=train, val=val, test=test)
+    split = DataSplit(train=train, valid=valid, test=test)
     logger.info(f"Ruling-level split: {split.summary()}")
 
     # Verify no ruling leaks across splits
-    _verify_ruling_isolation(train, val, test)
+    _verify_ruling_isolation(train, valid, test)
 
     # Check for text leakage
-    leaks = detect_leakage(train, val, test)
+    leaks = detect_leakage(train, valid, test)
     if leaks:
         logger.warning(f"Potential data leakage detected: {leaks}")
     else:
@@ -135,22 +135,22 @@ def _ruling_level_split(
 
 def _verify_ruling_isolation(
     train: list[TrainingExample],
-    val: list[TrainingExample],
+    valid: list[TrainingExample],
     test: list[TrainingExample],
 ) -> None:
     """Verify no ruling_number appears in more than one split."""
     train_rulings = {e.ruling_number for e in train if e.ruling_number}
-    val_rulings = {e.ruling_number for e in val if e.ruling_number}
+    valid_rulings = {e.ruling_number for e in valid if e.ruling_number}
     test_rulings = {e.ruling_number for e in test if e.ruling_number}
 
-    train_val = train_rulings & val_rulings
+    train_valid = train_rulings & valid_rulings
     train_test = train_rulings & test_rulings
-    val_test = val_rulings & test_rulings
+    valid_test = valid_rulings & test_rulings
 
-    if train_val or train_test or val_test:
+    if train_valid or train_test or valid_test:
         logger.error(
             f"Ruling isolation violated! "
-            f"train∩val={len(train_val)}, train∩test={len(train_test)}, val∩test={len(val_test)}"
+            f"train∩valid={len(train_valid)}, train∩test={len(train_test)}, valid∩test={len(valid_test)}"
         )
     else:
         logger.info("Ruling isolation verified: no ruling in multiple splits")
@@ -172,7 +172,7 @@ def _row_level_split(
         groups[key].append(ex)
 
     train: list[TrainingExample] = []
-    val: list[TrainingExample] = []
+    valid: list[TrainingExample] = []
     test: list[TrainingExample] = []
 
     for key, group in groups.items():
@@ -187,17 +187,17 @@ def _row_level_split(
             continue
 
         train.extend(group[:n_train])
-        val.extend(group[n_train:n_train + n_val])
+        valid.extend(group[n_train:n_train + n_val])
         test.extend(group[n_train + n_val:])
 
     rng.shuffle(train)
-    rng.shuffle(val)
+    rng.shuffle(valid)
     rng.shuffle(test)
 
-    split = DataSplit(train=train, val=val, test=test)
+    split = DataSplit(train=train, valid=valid, test=test)
     logger.info(f"Row-level split: {split.summary()}")
 
-    leaks = detect_leakage(train, val, test)
+    leaks = detect_leakage(train, valid, test)
     if leaks:
         logger.warning(f"Potential data leakage detected: {leaks}")
     else:
@@ -208,7 +208,7 @@ def _row_level_split(
 
 def detect_leakage(
     train: list[TrainingExample],
-    val: list[TrainingExample],
+    valid: list[TrainingExample],
     test: list[TrainingExample],
     threshold: float = 0.85,
     num_perm: int = 128,
@@ -224,13 +224,13 @@ def detect_leakage(
         except ValueError:
             continue
 
-    val_leaks = 0
-    for ex in val:
+    valid_leaks = 0
+    for ex in valid:
         mh = _make_minhash(ex.description, num_perm)
         if lsh.query(mh):
-            val_leaks += 1
-    if val_leaks:
-        leaks["val_vs_train"] = val_leaks
+            valid_leaks += 1
+    if valid_leaks:
+        leaks["valid_vs_train"] = valid_leaks
 
     test_leaks = 0
     for ex in test:

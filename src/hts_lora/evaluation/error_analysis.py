@@ -1,11 +1,12 @@
-"""Error analysis: bucket failures by type and sample for review."""
+"""Error analysis: bucket failures by type and sample for review (v2 ParsedPrediction)."""
 
 from __future__ import annotations
 
 from collections import defaultdict
 from typing import Any
 
-from hts_lora.utils.hts_codes import chapter, heading, match_at_level, normalize_code, validate_code
+from hts_lora.inference.parse_output import ParsedPrediction
+from hts_lora.utils.hts_codes import match_at_level, validate_code
 from hts_lora.utils.logging import get_logger
 
 logger = get_logger("evaluation.error_analysis")
@@ -16,10 +17,24 @@ RIGHT_CHAPTER_WRONG_HEADING = "right_chapter_wrong_heading"
 RIGHT_HEADING_WRONG_SUBHEADING = "right_heading_wrong_subheading"
 RIGHT_SUBHEADING_WRONG_FULL = "right_subheading_wrong_full"
 HALLUCINATED_CODE = "hallucinated_code"
-JSON_PARSE_FAILURE = "json_parse_failure"
+PARSE_FAILURE = "parse_failure"
 MISSING_PREDICTION = "missing_prediction"
 FALSE_ABSTAIN = "false_abstain"
 MISSED_ABSTAIN = "missed_abstain"
+
+
+def _get_hts_code(pred: Any) -> str:
+    """Extract HTS code from ParsedPrediction or dict."""
+    if isinstance(pred, ParsedPrediction):
+        return pred.hts_code or ""
+    return str(pred.get("hts_code", "") or "")
+
+
+def _is_abstention(pred: Any) -> bool:
+    """Check if prediction is an abstention."""
+    if isinstance(pred, ParsedPrediction):
+        return pred.is_abstention
+    return pred.get("is_abstention", False)
 
 
 def analyze_errors(
@@ -36,21 +51,21 @@ def analyze_errors(
         pred = p.get("prediction")
 
         sample = {
-            "description": p.get("description", p.get("prediction", {}).get("description", ""))[:200],
+            "description": p.get("description", "")[:200],
             "ground_truth": gt_code,
         }
 
         if not parse_ok:
             sample["raw"] = p.get("raw", "")[:200]
-            buckets[JSON_PARSE_FAILURE].append(sample)
+            buckets[PARSE_FAILURE].append(sample)
             continue
 
         if pred is None:
             buckets[MISSING_PREDICTION].append(sample)
             continue
 
-        pred_abstain = pred.get("abstain", False)
-        pred_code = str(pred.get("predicted_code", "") or "")
+        pred_abstain = _is_abstention(pred)
+        pred_code = _get_hts_code(pred)
 
         # Abstention errors
         if is_abstain and not pred_abstain:

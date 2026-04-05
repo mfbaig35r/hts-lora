@@ -95,14 +95,14 @@ def main(
             console.print("[red]Cannot format without split step[/red]")
             raise typer.Exit(1)
         console.print("[bold]Step 5/6: Format[/bold]")
-        for name, data in [("train", split.train), ("val", split.val), ("test", split.test)]:
+        for name, data in [("train", split.train), ("valid", split.valid), ("test", split.test)]:
             formatted = format_dataset(data)
             write_jsonl(formatted, fmt_out / f"{name}.jsonl")
             console.print(f"  {name}: {len(formatted)} examples -> {fmt_out / f'{name}.jsonl'}")
 
     if "audit" in step_list:
         if training_examples is None and split is not None:
-            training_examples = split.train + split.val + split.test
+            training_examples = split.train + split.valid + split.test
         if training_examples is None:
             from hts_lora.data.build_examples import TrainingExample
             from hts_lora.utils.io import read_jsonl

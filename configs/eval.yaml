@@ -1,12 +1,10 @@
-# Evaluation configuration
+# Evaluation configuration (v2 structured text output)
 
 adapter_path: "outputs/latest/adapter"
 test_data: "data/formatted/test.jsonl"
 
 generation:
   max_new_tokens: 512
-  temperature: 0.1
-  top_p: 0.9
   do_sample: false
   repetition_penalty: 1.05
 
@@ -15,11 +13,8 @@ metrics:
   - "chapter_match"
   - "heading_match"
   - "subheading_match"
-  - "top_k_accuracy"
   - "abstain_rate"
-  - "json_parse_rate"
-  - "confidence_calibration"
-
-top_k_values: [1, 3, 5]
+  - "parse_rate"
+  - "hierarchy_consistency"
 
 output_dir: "outputs/latest/eval"

@@ -60,7 +60,7 @@ def main(
     predictions = read_jsonl(predictions_path)
 
     from hts_lora.evaluation.reports import generate_report
-    report = generate_report(predictions, out, eval_cfg.top_k_values)
+    report = generate_report(predictions, out)
 
     # Print summary
     metrics = report["metrics"]
@@ -68,7 +68,7 @@ def main(
     console.print(f"  Exact match:    {metrics.get('exact_match', 0):.3f}")
     console.print(f"  Chapter match:  {metrics.get('chapter_match', 0):.3f}")
     console.print(f"  Heading match:  {metrics.get('heading_match', 0):.3f}")
-    console.print(f"  JSON parse:     {metrics.get('json_parse_rate', 0):.1%}")
+    console.print(f"  Parse rate:     {metrics.get('parse_rate', 0):.1%}")
     console.print(f"\n[bold green]Report saved to {out}[/bold green]")
 
 
