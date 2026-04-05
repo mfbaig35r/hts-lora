@@ -1,0 +1,43 @@
+# Data pipeline configuration — v2 hierarchical classify
+
+sources:
+  - path: "data/raw/latest/cross_rulings_enriched.jsonl"
+    format: "jsonl"
+    text_field: "description"
+    code_field: "hts_code"
+
+normalization:
+  min_description_length: 30
+  max_description_length: 2048
+  dedup_minhash_threshold: 0.8
+  dedup_minhash_num_perm: 128
+
+task_weights:
+  hierarchical_classify: 0.90
+  abstention: 0.10
+
+abstention:
+  rate: 0.10
+  label: "__ABSTAIN__"
+  categories:
+    - "vague_description"
+    - "missing_materials"
+    - "ambiguous_use"
+
+frequency_cap:
+  enabled: true
+  max_per_code: 100
+  apply_to: "train"
+
+split:
+  train: 0.80
+  val: 0.10
+  test: 0.10
+  seed: 42
+  stratify_by: "chapter"
+  split_by: "ruling"
+
+glossary_path: "data/raw/latest/glossary.jsonl"
+
+output_dir: "data/processed"
+formatted_dir: "data/formatted"

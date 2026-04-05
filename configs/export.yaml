@@ -1,0 +1,29 @@
+# Export pipeline configuration — DB → raw JSONL
+
+database:
+  batch_size: 5000
+
+extractions:
+  min_description_length: 30
+  min_reasoning_length: 20
+  max_reasoning_length: 2000
+  require_hts_code: true
+  require_reasoning: true
+  exclude_failed: true
+
+current_valid:
+  enabled: true
+  match_level: "hts8"
+  log_excluded: true
+
+glossary:
+  enabled: true
+  min_senses: 1
+
+enrichments:
+  enabled: true
+  min_description_length: 30
+
+output:
+  base_dir: "data/raw"
+  versioned: true

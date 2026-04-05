@@ -1,0 +1,34 @@
+# Data
+data/raw/
+data/processed/
+data/formatted/
+
+# Model outputs
+outputs/
+*.pt
+*.safetensors
+*.bin
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environment
+.env
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Misc
+*.log
+wandb/
