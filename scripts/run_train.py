@@ -20,6 +20,7 @@ def main(
     config: str = typer.Option("configs/train.yaml", help="Path to train config YAML"),
     data_dir: Optional[str] = typer.Option(None, help="Override data directory"),
     output_dir: Optional[str] = typer.Option(None, help="Override output directory"),
+    resume: Optional[str] = typer.Option(None, help="Resume from checkpoint path"),
 ) -> None:
     """Launch LoRA fine-tuning."""
     setup_logging()
@@ -36,9 +37,11 @@ def main(
     console.print(f"  Epochs: {cfg.training.num_train_epochs}")
     console.print(f"  Batch size: {cfg.training.per_device_train_batch_size} x {cfg.training.gradient_accumulation_steps}")
     console.print(f"  Data: {cfg.data_dir}")
+    if resume:
+        console.print(f"  Resume from: {resume}")
     console.print()
 
-    adapter_path = train(cfg)
+    adapter_path = train(cfg, resume_from=resume)
     console.print(f"\n[bold green]Training complete![/bold green] Adapter saved to: {adapter_path}")
 
 

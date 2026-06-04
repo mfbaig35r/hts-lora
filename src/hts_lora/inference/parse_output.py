@@ -103,10 +103,56 @@ def parse_prediction(text: str) -> ParsedPrediction:
     # Parse provides_for (multiline: from "Provides for:" to next section or end)
     result.provides_for = _extract_multiline(body, "Provides for:")
 
+    # Normalize codes to canonical dotted form and backfill any missing level
+    # from the levels below it. The HTS hierarchy is strictly nested:
+    #   chapter (2d) ⊂ heading (4d) ⊂ subheading (6d) ⊂ hts_code (≥8d)
+    # so if the model emitted e.g. Chapter + Subheading + HTS Code but skipped
+    # the Heading line, we can still populate heading_code from those.
+    _normalize_hierarchy(result)
+
     # parse_ok if we got at least an HTS code
     result.parse_ok = result.hts_code is not None
 
     return result
+
+
+def _strip_dots(code: str | None) -> str:
+    return code.replace(".", "") if code else ""
+
+
+def _normalize_hierarchy(result: ParsedPrediction) -> None:
+    """Backfill missing hierarchy codes from lower levels and canonicalize format."""
+    # Canonicalize what we already have (e.g., "6110" → "61.10")
+    if result.heading_code:
+        digits = _strip_dots(result.heading_code)
+        if len(digits) >= 4 and "." not in result.heading_code:
+            result.heading_code = f"{digits[:2]}.{digits[2:4]}"
+    if result.subheading_code:
+        digits = _strip_dots(result.subheading_code)
+        if len(digits) >= 6 and "." not in result.subheading_code:
+            result.subheading_code = f"{digits[:4]}.{digits[4:6]}"
+
+    # Derive subheading from HTS code if missing
+    if not result.subheading_code and result.hts_code:
+        digits = _strip_dots(result.hts_code)
+        if len(digits) >= 6:
+            result.subheading_code = f"{digits[:4]}.{digits[4:6]}"
+
+    # Derive heading from subheading or HTS code if missing
+    if not result.heading_code:
+        source = _strip_dots(result.subheading_code) or _strip_dots(result.hts_code)
+        if len(source) >= 4:
+            result.heading_code = f"{source[:2]}.{source[2:4]}"
+
+    # Derive chapter from anything below if missing
+    if not result.chapter_code:
+        source = (
+            _strip_dots(result.heading_code)
+            or _strip_dots(result.subheading_code)
+            or _strip_dots(result.hts_code)
+        )
+        if len(source) >= 2:
+            result.chapter_code = source[:2]
 
 
 def _extract_multiline(text: str, prefix: str) -> str | None:

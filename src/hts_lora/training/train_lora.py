@@ -17,7 +17,7 @@ from hts_lora.utils.logging import get_logger, setup_logging
 logger = get_logger("training.train_lora")
 
 
-def train(config: TrainConfig) -> Path:
+def train(config: TrainConfig, resume_from: str | None = None) -> Path:
     """Run the full LoRA fine-tuning pipeline.
 
     Returns the path to the saved adapter directory.
@@ -90,6 +90,7 @@ def train(config: TrainConfig) -> Path:
         bf16=hp.bf16,
         fp16=hp.fp16,
         gradient_checkpointing=hp.gradient_checkpointing,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         optim=hp.optim,
         report_to="none",
         remove_unused_columns=False,
@@ -107,8 +108,11 @@ def train(config: TrainConfig) -> Path:
     )
 
     # Train
-    logger.info("Starting training...")
-    trainer.train()
+    if resume_from:
+        logger.info(f"Resuming training from {resume_from}")
+    else:
+        logger.info("Starting training...")
+    trainer.train(resume_from_checkpoint=resume_from)
 
     # Save adapter
     adapter_dir = run_dir / "adapter"

@@ -53,7 +53,13 @@ class TestParseClassification:
 
         assert p.parse_ok is True
         assert p.hts_code == "8544.30.0000"
-        assert p.chapter_code is None
+        # Upper levels are backfilled from the HTS code (see TestHierarchyBackfill)
+        assert p.chapter_code == "85"
+        assert p.heading_code == "85.44"
+        assert p.subheading_code == "8544.30"
+        # Descriptions stay None — we only derive codes, not fabricated text
+        assert p.chapter_desc is None
+        assert p.heading_desc is None
         assert p.reasoning is None
 
     def test_multiline_reasoning(self):
@@ -92,6 +98,94 @@ class TestParseClassification:
 
         assert p.provides_for is not None
         assert "those of copper" in p.provides_for
+
+
+class TestHierarchyBackfill:
+    """Model sometimes skips a structured line (commonly Heading).
+    The parser should reconstruct missing levels from lower levels.
+    """
+
+    def test_missing_heading_derived_from_subheading(self):
+        # Real wool-sweater case: model emits chapter + subheading + HTS but no Heading line
+        text = (
+            "Chapter 61: ARTICLES OF APPAREL AND CLOTHING ACCESSORIES, KNITTED OR CROCHETED\n"
+            "Subheading 6110.11: Sweaters, knitted or crocheted, of wool\n"
+            "HTS Code: 6110.11.0000\n"
+            "\n"
+            "Reasoning: Classified under heading 6110 for knitted sweaters."
+        )
+        p = parse_prediction(text)
+
+        assert p.parse_ok is True
+        assert p.chapter_code == "61"
+        assert p.heading_code == "61.10"  # derived from subheading 6110.11
+        assert p.heading_desc is None  # we don't fabricate descriptions
+        assert p.subheading_code == "6110.11"
+        assert p.hts_code == "6110.11.0000"
+
+    def test_missing_heading_and_subheading_derived_from_hts(self):
+        text = (
+            "Chapter 85: Electrical machinery\n"
+            "HTS Code: 8544.30.0000\n"
+            "Reasoning: Insulated wire."
+        )
+        p = parse_prediction(text)
+
+        assert p.parse_ok is True
+        assert p.chapter_code == "85"
+        assert p.heading_code == "85.44"
+        assert p.subheading_code == "8544.30"
+        assert p.hts_code == "8544.30.0000"
+
+    def test_missing_chapter_derived_from_heading(self):
+        text = (
+            "Heading 85.44: Insulated wire\n"
+            "Subheading 8544.30: Winding wire\n"
+            "HTS Code: 8544.30.0000"
+        )
+        p = parse_prediction(text)
+
+        assert p.chapter_code == "85"
+        assert p.heading_code == "85.44"
+
+    def test_heading_without_dot_normalized(self):
+        # Model writes "Heading 6110:" instead of "Heading 61.10:"
+        text = (
+            "Chapter 61: Apparel\n"
+            "Heading 6110: Knitted sweaters\n"
+            "Subheading 6110.11: Of wool\n"
+            "HTS Code: 6110.11.0010"
+        )
+        p = parse_prediction(text)
+
+        assert p.heading_code == "61.10"  # normalized to dotted form
+        assert p.heading_desc == "Knitted sweaters"
+
+    def test_subheading_without_dot_normalized(self):
+        text = (
+            "Chapter 85: Electrical\n"
+            "Heading 85.44: Wire\n"
+            "Subheading 854430: Winding\n"
+            "HTS Code: 8544.30.0000"
+        )
+        p = parse_prediction(text)
+
+        assert p.subheading_code == "8544.30"
+
+    def test_only_hts_backfills_everything(self):
+        p = parse_prediction("HTS Code: 8714.91.9000")
+
+        assert p.parse_ok is True
+        assert p.chapter_code == "87"
+        assert p.heading_code == "87.14"
+        assert p.subheading_code == "8714.91"
+        assert p.hts_code == "8714.91.9000"
+
+    def test_no_backfill_when_no_source_data(self):
+        p = parse_prediction("")
+        assert p.chapter_code is None
+        assert p.heading_code is None
+        assert p.subheading_code is None
 
 
 class TestParseAbstention:
