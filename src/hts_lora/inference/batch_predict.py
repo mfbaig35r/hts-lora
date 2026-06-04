@@ -18,6 +18,30 @@ from hts_lora.utils.logging import get_logger
 logger = get_logger("inference.batch_predict")
 
 
+def build_messages_for_record(
+    record: dict[str, Any],
+    default_variant: InputVariant = "rich",
+) -> list[dict[str, str]]:
+    """Build chat messages (system + user) for one inference record.
+
+    Prefers pre-built `messages` (v2 formatted training/test data,
+    ATLAS conversion). Falls back to constructing from raw fields
+    (description / materials / product_use / country / glossary_terms)
+    via build_v2_messages for ad-hoc inputs.
+    """
+    if "messages" in record and record["messages"]:
+        return list(record["messages"][:2])  # system + user only
+    variant = record.get("variant", record.get("input_variant", default_variant))
+    return build_v2_messages(
+        description=record["description"],
+        variant=variant,
+        materials=record.get("materials"),
+        product_use=record.get("product_use"),
+        country=record.get("country"),
+        glossary_terms=record.get("glossary_terms"),
+    )
+
+
 def batch_predict(
     model: AutoModelForCausalLM,
     tokenizer: AutoTokenizer,
@@ -88,21 +112,7 @@ def _predict_batch(
     # Build prompts
     prompts = []
     for record in batch:
-        # Prefer pre-built messages when the record already carries them
-        # (v2 formatted training/test data, ATLAS conversion). Falls back
-        # to building from raw fields for ad-hoc inputs.
-        if "messages" in record and record["messages"]:
-            messages = record["messages"][:2]  # system + user only
-        else:
-            variant = record.get("variant", record.get("input_variant", default_variant))
-            messages = build_v2_messages(
-                description=record["description"],
-                variant=variant,
-                materials=record.get("materials"),
-                product_use=record.get("product_use"),
-                country=record.get("country"),
-                glossary_terms=record.get("glossary_terms"),
-            )
+        messages = build_messages_for_record(record, default_variant)
         text = tokenizer.apply_chat_template(
             messages,
             tokenize=False,
