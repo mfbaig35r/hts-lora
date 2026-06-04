@@ -23,7 +23,7 @@ def batch_predict(
     tokenizer: AutoTokenizer,
     input_path: str | Path,
     output_path: str | Path,
-    batch_size: int = 8,
+    batch_size: int = 16,
     max_new_tokens: int = 512,
     default_variant: InputVariant = "rich",
 ) -> dict[str, int]:
@@ -88,15 +88,21 @@ def _predict_batch(
     # Build prompts
     prompts = []
     for record in batch:
-        variant = record.get("variant", record.get("input_variant", default_variant))
-        messages = build_v2_messages(
-            description=record["description"],
-            variant=variant,
-            materials=record.get("materials"),
-            product_use=record.get("product_use"),
-            country=record.get("country"),
-            glossary_terms=record.get("glossary_terms"),
-        )
+        # Prefer pre-built messages when the record already carries them
+        # (v2 formatted training/test data, ATLAS conversion). Falls back
+        # to building from raw fields for ad-hoc inputs.
+        if "messages" in record and record["messages"]:
+            messages = record["messages"][:2]  # system + user only
+        else:
+            variant = record.get("variant", record.get("input_variant", default_variant))
+            messages = build_v2_messages(
+                description=record["description"],
+                variant=variant,
+                materials=record.get("materials"),
+                product_use=record.get("product_use"),
+                country=record.get("country"),
+                glossary_terms=record.get("glossary_terms"),
+            )
         text = tokenizer.apply_chat_template(
             messages,
             tokenize=False,

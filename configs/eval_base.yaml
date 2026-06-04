@@ -5,7 +5,7 @@ adapter_path: ""
 test_data: "data/formatted/test.jsonl"
 
 generation:
-  max_new_tokens: 512
+  max_new_tokens: 256
   do_sample: false
   repetition_penalty: 1.05
 
