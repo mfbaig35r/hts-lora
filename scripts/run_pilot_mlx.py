@@ -260,8 +260,8 @@ def generate(
             "parse_ok": parsed.parse_ok,
             "predicted_code": parsed.hts_code,
             "expected_code": ex.get("hts_code", ""),
-            "generated": generated[:300],
-            "expected": expected_body[:300],
+            "generated": generated,
+            "expected": expected_body,
         })
 
         if (i + 1) % 10 == 0:

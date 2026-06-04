@@ -1,6 +1,7 @@
-# Evaluation configuration (v2 structured text output)
+# Base-model baseline: unwrapped Nemotron-Nano-8B, no LoRA.
+# Empty adapter_path triggers base-only mode in load_for_inference().
 
-adapter_path: "outputs/train_h100_20260406/adapter"
+adapter_path: ""
 test_data: "data/formatted/test.jsonl"
 
 generation:
@@ -17,4 +18,4 @@ metrics:
   - "parse_rate"
   - "hierarchy_consistency"
 
-output_dir: "outputs/eval_v1"
+output_dir: "outputs/eval_base_v1"

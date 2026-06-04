@@ -2,9 +2,15 @@
 data/raw/
 data/processed/
 data/formatted/
+data/backups/
+data/pilot/
+# External datasets: only the 200-row ATLAS test set is committed;
+# the 18k-row train set is local-only.
+data/external/atlas_train.jsonl
 
 # Model outputs
 outputs/
+models/
 *.pt
 *.safetensors
 *.bin

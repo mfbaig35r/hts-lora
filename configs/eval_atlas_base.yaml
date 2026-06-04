@@ -1,0 +1,21 @@
+# Base Nemotron (no adapter) evaluated on ATLAS test set.
+# Apples-to-apples baseline against ATLAS paper's GPT-5-Thinking zero-shot
+# row (25.0% exact match on this same N=200).
+
+adapter_path: ""
+test_data: "data/external/atlas_test_v2.jsonl"
+
+generation:
+  max_new_tokens: 512
+  do_sample: false
+  repetition_penalty: 1.05
+
+metrics:
+  - "exact_match"
+  - "chapter_match"
+  - "heading_match"
+  - "subheading_match"
+  - "parse_rate"
+  - "hierarchy_consistency"
+
+output_dir: "outputs/eval_atlas_base"

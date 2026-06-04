@@ -32,9 +32,11 @@ def main(
     out = Path(eval_cfg.output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
+    mode = "base-only (no adapter)" if not eval_cfg.adapter_path else f"adapter: {eval_cfg.adapter_path}"
     console.print("[bold]HTS LoRA Evaluation[/bold]")
-    console.print(f"  Adapter: {eval_cfg.adapter_path}")
+    console.print(f"  Mode:      {mode}")
     console.print(f"  Test data: {eval_cfg.test_data}")
+    console.print(f"  Output:    {eval_cfg.output_dir}")
     console.print()
 
     # Load model

@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
+from hts_lora.evaluation.metrics import _gold_codes, _match_any
 from hts_lora.inference.parse_output import ParsedPrediction
-from hts_lora.utils.hts_codes import match_at_level, validate_code
+from hts_lora.utils.hts_codes import validate_code
 from hts_lora.utils.logging import get_logger
 
 logger = get_logger("evaluation.error_analysis")
@@ -45,14 +46,15 @@ def analyze_errors(
     buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
     for p in predictions:
-        gt_code = p.get("hts_code", "")
+        gold = _gold_codes(p)
+        gt_display = gold[0] if len(gold) == 1 else (gold if gold else "")
         is_abstain = p.get("abstain", False)
         parse_ok = p.get("parse_ok", False)
         pred = p.get("prediction")
 
         sample = {
             "description": p.get("description", "")[:200],
-            "ground_truth": gt_code,
+            "ground_truth": gt_display,
         }
 
         if not parse_ok:
@@ -86,16 +88,16 @@ def analyze_errors(
             buckets[HALLUCINATED_CODE].append(sample)
             continue
 
-        if match_at_level(pred_code, gt_code, "exact"):
+        if _match_any(pred_code, gold, "exact"):
             continue  # Correct
 
         sample["predicted"] = pred_code
 
-        if not match_at_level(pred_code, gt_code, "chapter"):
+        if not _match_any(pred_code, gold, "chapter"):
             buckets[WRONG_CHAPTER].append(sample)
-        elif not match_at_level(pred_code, gt_code, "heading"):
+        elif not _match_any(pred_code, gold, "heading"):
             buckets[RIGHT_CHAPTER_WRONG_HEADING].append(sample)
-        elif not match_at_level(pred_code, gt_code, "subheading"):
+        elif not _match_any(pred_code, gold, "subheading"):
             buckets[RIGHT_HEADING_WRONG_SUBHEADING].append(sample)
         else:
             buckets[RIGHT_SUBHEADING_WRONG_FULL].append(sample)

@@ -6,11 +6,8 @@ from typing import Any
 
 from hts_lora.inference.parse_output import ParsedPrediction
 from hts_lora.utils.hts_codes import (
-    chapter,
-    heading,
     match_at_level,
     normalize_code,
-    subheading,
     validate_code,
 )
 from hts_lora.utils.logging import get_logger
@@ -24,7 +21,9 @@ def compute_metrics(
     """Compute all evaluation metrics from a list of v2 prediction results.
 
     Each prediction dict should have:
-        - hts_code: ground truth code
+        - hts_code: ground truth. Either a single code (str) or a list of
+          acceptable codes (list[str]). List-shape is used for benchmarks
+          like ATLAS where some examples accept any of several codes.
         - prediction: ParsedPrediction (or dict with same fields)
         - parse_ok: whether structured text parsing succeeded
         - abstain: whether the example is an abstention case (ground truth)
@@ -64,15 +63,15 @@ def compute_metrics(
     subheading_match = 0
 
     for p in classify_valid:
-        gt = p["hts_code"]
+        gold = _gold_codes(p)
         pred_code = _get_hts_code(_get_pred(p))
-        if match_at_level(pred_code, gt, "exact"):
+        if _match_any(pred_code, gold, "exact"):
             exact += 1
-        if match_at_level(pred_code, gt, "chapter"):
+        if _match_any(pred_code, gold, "chapter"):
             chapter_match += 1
-        if match_at_level(pred_code, gt, "heading"):
+        if _match_any(pred_code, gold, "heading"):
             heading_match += 1
-        if match_at_level(pred_code, gt, "subheading"):
+        if _match_any(pred_code, gold, "subheading"):
             subheading_match += 1
 
     n_classify = len(classify_examples) or 1
@@ -109,6 +108,29 @@ def compute_metrics(
         f"parse_rate={metrics['parse_rate']:.3f}"
     )
     return metrics
+
+
+def _gold_codes(p: dict[str, Any]) -> list[str]:
+    """Return the ground-truth codes for a record as a list.
+
+    Accepts either `hts_code: str` (single gold) or `hts_code: list[str]`
+    (any-of-set gold, e.g. ATLAS multi-code rows).
+    """
+    raw = p.get("hts_code", "")
+    if isinstance(raw, list):
+        return [c for c in raw if c]
+    return [raw] if raw else []
+
+
+def _match_any(pred_code: str, gold: list[str], level: str) -> bool:
+    """True if pred_code matches any of the gold codes at the given level."""
+    for g in gold:
+        try:
+            if match_at_level(pred_code, g, level):
+                return True
+        except ValueError:
+            continue
+    return False
 
 
 def _get_pred(p: dict[str, Any]) -> Any:

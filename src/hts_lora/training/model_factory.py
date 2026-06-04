@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import torch
@@ -13,6 +14,15 @@ from hts_lora.utils.config import TrainConfig
 from hts_lora.utils.logging import get_logger
 
 logger = get_logger("training.model_factory")
+
+
+def _get_device_map() -> str | dict:
+    """Return the right device_map for single-GPU or DDP multi-GPU."""
+    local_rank = os.environ.get("LOCAL_RANK")
+    if local_rank is not None:
+        # DDP: each process loads model onto its assigned GPU
+        return {"": int(local_rank)}
+    return "auto"
 
 
 def load_base_model(config: TrainConfig) -> AutoModelForCausalLM:
@@ -27,16 +37,17 @@ def load_base_model(config: TrainConfig) -> AutoModelForCausalLM:
         bnb_4bit_use_double_quant=quant.bnb_4bit_use_double_quant,
     )
 
+    device_map = _get_device_map()
     model = AutoModelForCausalLM.from_pretrained(
         config.model.model_id,
         quantization_config=bnb_config,
         torch_dtype=compute_dtype,
-        device_map="auto",
+        device_map=device_map,
         attn_implementation=config.model.attn_implementation,
         trust_remote_code=True,
     )
 
-    logger.info(f"Loaded base model: {config.model.model_id}")
+    logger.info(f"Loaded base model: {config.model.model_id} (device_map={device_map})")
     return model
 
 
@@ -86,10 +97,17 @@ def load_for_inference(
     config: TrainConfig,
     adapter_path: str | Path,
 ) -> tuple[AutoModelForCausalLM, AutoTokenizer]:
-    """Load quantized base model + merge LoRA adapter for inference."""
+    """Load quantized base model for inference.
+
+    If `adapter_path` is empty/falsy, returns the base model unwrapped
+    (no LoRA). Used for base-vs-adapter baselines.
+    """
     model = load_base_model(config)
-    model = PeftModel.from_pretrained(model, str(adapter_path))
-    logger.info(f"Loaded LoRA adapter from {adapter_path}")
+    if adapter_path:
+        model = PeftModel.from_pretrained(model, str(adapter_path))
+        logger.info(f"Loaded LoRA adapter from {adapter_path}")
+    else:
+        logger.info("Base-model mode: no LoRA adapter applied")
 
     tokenizer = load_tokenizer(config)
     tokenizer.padding_side = "left"  # Left-padding for batched inference

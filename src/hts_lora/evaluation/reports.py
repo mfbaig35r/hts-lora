@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from hts_lora.evaluation.error_analysis import analyze_errors
-from hts_lora.evaluation.metrics import compute_metrics
+from hts_lora.evaluation.metrics import _gold_codes, _match_any, compute_metrics
 from hts_lora.inference.parse_output import ParsedPrediction
-from hts_lora.utils.hts_codes import chapter, match_at_level, validate_code
+from hts_lora.utils.hts_codes import chapter, validate_code
 from hts_lora.utils.io import write_json, write_jsonl
 from hts_lora.utils.logging import get_logger
 
@@ -47,7 +47,7 @@ def generate_report(
     # Per-chapter breakdown
     per_chapter = _per_chapter_metrics(predictions)
 
-    # Failures: parsed, non-abstain, with a code that doesn't match
+    # Failures: parsed, non-abstain, with a code that doesn't match any gold
     failures = []
     for p in predictions:
         if not p.get("parse_ok") or not p.get("prediction"):
@@ -56,7 +56,7 @@ def generate_report(
             continue
         pred_code = _get_hts_code(p["prediction"])
         if pred_code and validate_code(pred_code):
-            if not match_at_level(pred_code, p["hts_code"], "exact"):
+            if not _match_any(pred_code, _gold_codes(p), "exact"):
                 failures.append(p)
 
     # Assemble report
@@ -85,7 +85,15 @@ def _per_chapter_metrics(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     for p in predictions:
         if p.get("abstain"):
             continue
-        chap = chapter(p["hts_code"])
+        # For multi-gold records (ATLAS multi-code rows), bucket by the
+        # chapter of the first gold code. Deterministic and simple.
+        gold = _gold_codes(p)
+        if not gold:
+            continue
+        try:
+            chap = chapter(gold[0])
+        except ValueError:
+            continue
         by_chapter[chap].append(p)
 
     result = {}

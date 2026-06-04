@@ -1,7 +1,8 @@
-# Evaluation configuration (v2 structured text output)
+# v1 LoRA adapter evaluated on the converted ATLAS test set (200 examples,
+# any-of-set gold codes). Produced by scripts/build_atlas_eval.py.
 
 adapter_path: "outputs/train_h100_20260406/adapter"
-test_data: "data/formatted/test.jsonl"
+test_data: "data/external/atlas_test_v2.jsonl"
 
 generation:
   max_new_tokens: 512
@@ -13,8 +14,7 @@ metrics:
   - "chapter_match"
   - "heading_match"
   - "subheading_match"
-  - "abstain_rate"
   - "parse_rate"
   - "hierarchy_consistency"
 
-output_dir: "outputs/eval_v1"
+output_dir: "outputs/eval_atlas_v1"
