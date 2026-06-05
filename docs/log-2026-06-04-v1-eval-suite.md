@@ -332,13 +332,63 @@ The MLX/HF parity check (deferred) is the bridge between today's number and the 
 
 ---
 
+## Addendum, June 5: Layer A measurement (negative result)
+
+Per the morning-after follow-up, we scoped and built Layer A (stat-suffix validation) using a training-derived index. The intent was to catch the dominant "right_subheading_wrong_full" error bucket (40 of 118 errors on ATLAS, 2,458 of 6,206 on the test set) by replacing invalid 10-digit codes with the most-common valid completion under the same 8-digit prefix.
+
+The result was a negative ablation, and an informative one.
+
+### What we built
+
+- `scripts/build_stat_suffix_index.py` — walks `data/formatted/train.jsonl`, extracts every non-abstain gold 10-digit code, builds an index of valid 10-digit codes by 8-digit prefix with training-set frequencies as the picker weight. Produces `data/external/stat_suffix_index.json` (550 KB, 9,791 distinct 10-digit codes, 6,107 distinct 8-digit subheadings).
+- `src/hts_lora/postprocess/stat_suffix.py` — the runtime validator. `validate_and_complete(prediction, index)` returns the prediction unchanged if the 10-digit code is valid, replaces it with the most-frequent valid completion if the code is invalid but the 8-digit prefix is known, and leaves it alone if the 8-digit prefix is unknown.
+- `tests/test_stat_suffix.py` — 12 tests covering valid codes, completion, abstain bypass, normalization, and field preservation.
+- `scripts/apply_stat_suffix_validator.py` — post-hoc scorer that applies Layer A to a saved predictions.jsonl without re-running inference.
+- `docs/layer-a-followup-usitc.md` — note for switching to the USITC HTSUS export when production deployment requires it.
+
+### What we measured
+
+| Test set | v1 exact match | After Layer A | Delta | Records changed | Already-valid 10-digit rate |
+|---|---|---|---|---|---|
+| ATLAS (N=200) | 41.0% | 41.0% | +0.00pp | 2 / 200 (1.0%) | 96.5% |
+| Our test (N=14,952) | 58.74% | 58.78% | +0.04pp | 49 / 14,952 (0.3%) | 87.3% |
+
+Lift was essentially zero on both test sets.
+
+### Why this happened
+
+The v1 model produces VALID HTSUS 10-digit codes 87 to 96 percent of the time. Layer A by design only triggers on INVALID 10-digit predictions. The dominant failure mode is not "model hallucinates a fake code" but "model picks a real code that is not the right one." Layer A cannot fix wrong-but-valid predictions.
+
+A re-decomposition of the ATLAS errors confirmed it:
+- 23 of 116 failures (19.8%) are pure stat-suffix errors (right at 8-digit, wrong at 10-digit). All but 2 of those have model predictions that are themselves valid 10-digit codes elsewhere in the schedule. Layer A leaves them alone.
+- 17 of 116 failures (14.7%) are 8-digit-level errors (positions 6-7 differ). Layer A cannot anchor a correction.
+- 76 of 116 failures (65.5%) are at the 6-digit subheading level or higher. Well out of Layer A's scope.
+
+### Why this matters for the paper
+
+Three things, all worth a paragraph in the Discussion section:
+
+1. **The v2 structured output format is doing its job.** 87 to 96 percent of model predictions are valid HTSUS 10-digit codes, with parse rate at 99.94 percent. The model is not hallucinating; it is misclassifying.
+
+2. **Future gains have to come from disambiguation, not validation.** Stat-suffix validation, code-existence checks, and other post-hoc validators have a low ceiling because the model rarely produces invalid output. The next leverage points are retrieval-augmented generation (Layer C / v2 R3), nearest-neighbor reranking, and abstention calibration.
+
+3. **The negative result strengthens the positive claims.** Reporting "we measured the obvious cheap post-processor; it didn't help; here is why" demonstrates the 41.0 percent and 58.7 percent numbers are not propped up by hidden engineering. The paper claim is the model, with the format, end-to-end.
+
+The Layer A code stays in the repo. It is functional, tested, and reproducible. The USITC follow-up note documents what would change for production deployment. Layer A is a measurement artifact, not a v1.1 release.
+
+### What to drop from the open items
+
+The "Layer A stat-suffix validator" item is closed. Replace with: "Retrieval-augmented inference (Layer C / v2 R3) is the next-leverage validation/disambiguation layer, not stat-suffix validation."
+
+---
+
 ## Closing Note
 
 The April 6 H100 log ended with "Mission accomplished" because that session got the model into existence. This session is the bookend: we now have measured proof that the model works at the published-benchmark scale, with tight statistical bounds on a larger held-out set, and with base baselines that show the LoRA isn't just riding the base model's competence.
 
 The paper-defining moment is the 41.0% number on ATLAS. The paper-anchoring moment is the 58.7% on 14,952 examples. Together they say: a small, specialized model with the right training data and a structured output format can match a model 8x its size on a niche enterprise task, for less than $50 in training compute, and run on edge hardware.
 
-There is real work remaining. Stat-suffix validation should land. MLX/HF parity needs verification. The lost step-7000 checkpoint should probably be recovered via a brief retrain. The publication decision (v1 now vs v1.1 first vs Ministral first) needs to be made.
+There is real work remaining. MLX/HF parity needs verification. The lost step-7000 checkpoint should probably be recovered via a brief retrain. The publication decision (v1 now vs v1.1 first vs Ministral first) needs to be made.
 
 But the v1 thesis is verified.
 
