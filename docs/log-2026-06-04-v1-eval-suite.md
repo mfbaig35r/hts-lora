@@ -441,6 +441,74 @@ Add to closed: "MLX/HF parity check (confirmed q4 costs 5pp; conversion is corre
 
 ---
 
+## Addendum, June 5 (afternoon): Edge serving stack PoC
+
+Right after the parity check, we wired up the edge deployment proof of concept. Goal: a live, working, MLX-served `POST /classify` endpoint running on the M4 in interactive latency.
+
+### What we built
+
+The pieces already existed in the repo from the earlier serving plan (`src/hts_lora/serving/`, `scripts/run_serve_mlx.py`, `scripts/run_serve_api.py`, `scripts/smoke_test_serve.py`). Today's adapter conversion plus today's MLX parity work let us skip the slowest step in the original `run_serve_mlx.py merge -> convert` flow (which loads the full 16 GB HF base in bfloat16 on CPU and takes 10+ minutes).
+
+Fast path now:
+1. `scripts/convert_hf_adapter_to_mlx.py` produces `adapters_v1_mlx/` from the HF PEFT adapter (seconds).
+2. `mlx_lm.fuse` merges `adapters_v1_mlx/` into the pre-quantized MLX base `bourn23/nvidia-llama-3.1-nemotron-nano-8b-v1-mlx-4bit` and writes `models/nemotron-hts-fused/` (~10 seconds, 4.5 GB output, q4).
+3. `mlx_lm.server --model models/nemotron-hts-fused --port 8080` runs the OpenAI-compatible upstream (~5 GB resident).
+4. `scripts/run_serve_api.py --upstream-model "$(pwd)/models/nemotron-hts-fused"` runs the FastAPI wrapper on port 8000.
+
+Total cold-start from a fresh checkout: probably 60 seconds (most of it model load on first request).
+
+Added to `scripts/run_serve_mlx.py`: a new `mlx-fuse` command that wraps step 2 with sensible defaults, so the standard recipe becomes `python scripts/run_serve_mlx.py mlx-fuse` + `serve`. The old `merge` and `convert` commands are kept for completeness but are no longer the recommended path.
+
+### What we tested
+
+End to end smoke through the FastAPI wrapper:
+
+    POST http://localhost:8000/classify
+    {
+      "description": "insulated copper electrical wire, 12 AWG, stranded",
+      "materials": "copper conductor, PVC insulation",
+      "use": "residential building wiring",
+      "country_of_origin": "Mexico"
+    }
+
+    -> 200 OK, latency 4.7 seconds
+    {
+      "hts_code": "8544.49.3080",
+      "chapter": {"code": "85", "description": "ELECTRICAL MACHINERY..."},
+      "heading": {"code": "85.44", ...},
+      "subheading": {"code": "8544.49", ...},
+      "reasoning": "CBP classified the wire under heading 8544...",
+      "provides_for": "Insulated wire...: Other electric conductors...",
+      "is_abstention": false,
+      "parse_ok": true,
+      "model": "hts-nemotron-8b-lora-v1",
+      "latency_ms": 4664
+    }
+
+Behavior matches the direct `mlx_lm.server` smoke test (same HTS code, same latency ballpark). The FastAPI wrapper hides the v2 prompt format from the caller and returns typed JSON, exactly as the original serving plan specified.
+
+### What this unlocks
+
+The paper can now point at a running thing, not just a checkpoint. The narrative changes from "we trained this and here are the numbers" to "we trained this, here are the numbers, here is a $700 box that runs it interactively, here is the curl command to try it." That is a stronger story than headline accuracy alone.
+
+The 4.7 second latency at q4 quantization is consistent with the projection from earlier this morning (MLX q4 on M4 generates 30-60 tokens per second; a 100-200 token v2 response lands in 2-7 seconds). The M4 base 16 GB RAM has ~10 GB headroom even with both the MLX server and the FastAPI wrapper running, so the stack would survive a small concurrent request load.
+
+Production caveat: the 4.7 second figure is single-stream. Throughput under concurrent load would need batching, which neither `mlx_lm.server` nor our wrapper currently does. For an internal tool at a customs broker that's fine; for a public API it would need the Phase 3 work (out of scope for v1).
+
+### Closed open items
+
+- "Build the live serving stack" -> closed.
+- "Confirm the MLX serving stack reproduces the published v1 numbers" -> closed via this morning's parity check.
+
+### Now-open items the paper writeup needs
+
+- Decide on adapter and repo public toggle.
+- Decide on publication venue (blog + arXiv preprint vs workshop submission).
+- Decide on Ministral lap timing.
+- Decide on lost step-7000 retrain.
+
+---
+
 ## Closing Note
 
 The April 6 H100 log ended with "Mission accomplished" because that session got the model into existence. This session is the bookend: we now have measured proof that the model works at the published-benchmark scale, with tight statistical bounds on a larger held-out set, and with base baselines that show the LoRA isn't just riding the base model's competence.

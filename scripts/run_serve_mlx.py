@@ -42,6 +42,11 @@ DEFAULT_FUSED_DIR = Path("models/nemotron-hts-fused")
 DEFAULT_PORT = 8080
 DEFAULT_HOST = "127.0.0.1"
 
+# Fast path: pre-quantized MLX base + MLX-format LoRA adapter (produced by
+# scripts/convert_hf_adapter_to_mlx.py). Bypasses the merge-from-HF step.
+DEFAULT_MLX_BASE = "bourn23/nvidia-llama-3.1-nemotron-nano-8b-v1-mlx-4bit"
+DEFAULT_MLX_ADAPTER = Path("adapters_v1_mlx")
+
 
 @app.command()
 def merge(
@@ -156,6 +161,50 @@ def convert(
 
 
 @app.command()
+def mlx_fuse(
+    base: str = typer.Option(DEFAULT_MLX_BASE, help="Pre-quantized MLX base model"),
+    adapter: Path = typer.Option(
+        DEFAULT_MLX_ADAPTER, help="MLX-format LoRA adapter dir"
+    ),
+    output_dir: Path = typer.Option(DEFAULT_FUSED_DIR, help="Output MLX fused model"),
+    force: bool = typer.Option(False, "--force", help="Overwrite existing output_dir"),
+) -> None:
+    """Fast path: fuse an MLX-format LoRA adapter into a pre-quantized MLX base.
+
+    Skips the merge-from-HF + convert pipeline entirely. Requires the adapter
+    to be in MLX format (produced by scripts/convert_hf_adapter_to_mlx.py).
+    Takes seconds. Produces the same models/nemotron-hts-fused/ output as
+    `merge` + `convert` would, ready for `serve`.
+    """
+    if not adapter.exists():
+        console.print(
+            f"[red]MLX adapter not found at {adapter}. "
+            "Run scripts/convert_hf_adapter_to_mlx.py to produce it.[/red]"
+        )
+        raise typer.Exit(1)
+    if output_dir.exists() and not force:
+        console.print(
+            f"[yellow]Fused model already exists at {output_dir}. "
+            "Use --force to overwrite.[/yellow]"
+        )
+        return
+    if output_dir.exists() and force:
+        shutil.rmtree(output_dir)
+
+    console.print(f"[bold]Fusing[/bold] base={base} adapter={adapter} -> {output_dir}")
+    cmd = [
+        sys.executable, "-m", "mlx_lm", "fuse",
+        "--model", base,
+        "--adapter-path", str(adapter),
+        "--save-path", str(output_dir),
+    ]
+    subprocess.run(cmd, check=True)
+
+    size_gb = sum(p.stat().st_size for p in output_dir.rglob("*") if p.is_file()) / 1e9
+    console.print(f"[green]Fused MLX model saved to {output_dir} ({size_gb:.1f} GB)[/green]")
+
+
+@app.command()
 def serve(
     model_dir: Path = typer.Option(DEFAULT_FUSED_DIR, help="Path to fused MLX model"),
     host: str = typer.Option(DEFAULT_HOST, help="Bind host"),
@@ -165,7 +214,7 @@ def serve(
     if not model_dir.exists():
         console.print(
             f"[red]Fused MLX model not found at {model_dir}. "
-            "Run `merge` and `convert` first.[/red]"
+            "Run `mlx-fuse` (fast path) or `merge` + `convert` first.[/red]"
         )
         raise typer.Exit(1)
 
