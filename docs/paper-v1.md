@@ -291,6 +291,6 @@ Greenwich Mercantile. (2026). U.S. Customs Broker Cost & Brokerage Fees 2026: $1
 
 ---
 
-**Errata and corrections.** Open an issue at [github.com/mfbaig35r/hts-lora/issues](https://github.com/mfbaig35r/hts-lora/issues) or email [hello@canonical.agency](mailto:hello@canonical.agency).
+**Errata and corrections.** Open an issue at [github.com/mfbaig35r/hts-lora/issues](https://github.com/mfbaig35r/hts-lora/issues) or email [fbaig@htsmcp.com](mailto:fbaig@htsmcp.com).
 
 **Footnote.** This piece was drafted in collaboration with Claude (Anthropic). The training, evaluation, and engineering work was done over two long sessions across April and June 2026; the session logs in the repository capture the full process honestly, including the bugs caught along the way. Thanks to Claude for the collaboration and the candid pushback.
