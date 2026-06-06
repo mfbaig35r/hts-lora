@@ -10,11 +10,16 @@ Each example becomes a messages list:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from hts_lora.data.build_examples import TrainingExample
 from hts_lora.utils.hts_codes import chapter, format_code, heading, subheading
 from hts_lora.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    # Only used for type annotations on private helpers. Deferring the import
+    # keeps this module loadable in lightweight environments (the wrapper
+    # Docker image) without pulling in the full training pipeline.
+    from hts_lora.data.build_examples import TrainingExample  # noqa: F401
 
 logger = get_logger("data.formatters")
 

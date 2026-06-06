@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
-
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from typing import TYPE_CHECKING, Any, Literal
 
 from hts_lora.inference.parse_output import ParsedPrediction, parse_prediction
 from hts_lora.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    # Heavy ML deps are only needed by predict(); deferring the import keeps
+    # build_v2_messages importable from environments without torch installed
+    # (the wrapper Docker image, lightweight test contexts, etc.).
+    import torch  # noqa: F401
+    from transformers import AutoModelForCausalLM, AutoTokenizer  # noqa: F401
 
 logger = get_logger("inference.predict")
 
@@ -66,8 +70,8 @@ def build_v2_messages(
 
 
 def predict(
-    model: AutoModelForCausalLM,
-    tokenizer: AutoTokenizer,
+    model: "AutoModelForCausalLM",
+    tokenizer: "AutoTokenizer",
     description: str,
     variant: InputVariant = "rich",
     materials: str | None = None,
@@ -85,6 +89,8 @@ def predict(
       - raw: the raw generated text
       - parse_ok: whether parsing succeeded
     """
+    import torch  # local import: keeps module importable in torch-less envs
+
     messages = build_v2_messages(
         description, variant, materials, product_use, country, glossary_terms
     )

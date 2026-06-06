@@ -1,0 +1,45 @@
+# Build artifacts
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# Local environment
+.env
+.env.local
+
+# Large data / training artifacts. The Docker images do not need any of these.
+# Models and adapters are downloaded at runtime, not baked in.
+data/
+outputs/
+models/
+adapters/
+adapters_v1_mlx/
+
+# Backups + caches
+*.bak
+*.log
+.coverage
+htmlcov/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+._*
+
+# Git metadata (the image doesn't need it)
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# Docs and writing artifacts
+docs/
+.claude/
