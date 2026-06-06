@@ -217,7 +217,7 @@ The model runs in 4-bit MLX quantization in this configuration, which produces t
 
 There's a class of enterprise applications where the best architecture today is not "specialized model" and not "frontier model API" but "specialized model deployed locally on commodity hardware." HTS classification is one. Three others I'd name without having implemented them:
 
-**FDA medical device classification.** Devices are classified into Class I, II, or III based on intended use and risk, with a long tail of detailed product codes within each. The gold answers exist in public regulatory rulings. Recent academic work explores LLM-assisted classification specifically because the SaaS approach has the same data-sensitivity problem ([Wang et al. 2022](https://arxiv.org/pdf/2212.01217), [Yang et al. 2025](https://arxiv.org/pdf/2505.18695)). The FDA itself ran an AI-assisted scientific review pilot in early 2025.
+**FDA medical device classification.** Devices are classified into Class I, II, or III based on intended use and risk, with a long tail of detailed product codes within each. The gold answers exist in public regulatory rulings. Recent academic work explores LLM-assisted classification specifically because the SaaS approach has the same data-sensitivity problem ([Xu, 2022](https://arxiv.org/abs/2212.01217); [Han et al., 2025](https://arxiv.org/abs/2505.18695)). The FDA itself ran an AI-assisted scientific review pilot in early 2025.
 
 **India HSN tariff classification.** India's Harmonized System of Nomenclature is the Indian customs analogue to U.S. HTS. The data is gettable, the schedule is structured, the regulatory updates are regular, and Indian importers have the same in-house compliance constraints as U.S. ones.
 
@@ -283,9 +283,9 @@ Judy, B. (2024). Benchmarking Harmonized Tariff Schedule Classification Models. 
 
 Yuvraj, P., & Devarakonda, S. (2025). ATLAS: Benchmarking and Adapting LLMs for Global Trade via Harmonized Tariff Code Classification. arXiv:2509.18400. [arxiv.org/abs/2509.18400](https://arxiv.org/abs/2509.18400)
 
-Wang, B., et al. (2022). Using Large Pre-Trained Language Model to Assist FDA in Premarket Medical Device Classification. arXiv:2212.01217. [arxiv.org/abs/2212.01217](https://arxiv.org/abs/2212.01217)
+Xu, Z. (2022). Using Large Pre-Trained Language Model to Assist FDA in Premarket Medical Device Classification. arXiv:2212.01217. [arxiv.org/abs/2212.01217](https://arxiv.org/abs/2212.01217)
 
-Yang, et al. (2025). AI for Regulatory Affairs: Balancing Accuracy, Interpretability, and Computational Cost in Medical Device Classification. arXiv:2505.18695. [arxiv.org/abs/2505.18695](https://arxiv.org/abs/2505.18695)
+Han, Y., Ceross, A., & Bergmann, J. H. M. (2025). AI for Regulatory Affairs: Balancing Accuracy, Interpretability, and Computational Cost in Medical Device Classification. arXiv:2505.18695. [arxiv.org/abs/2505.18695](https://arxiv.org/abs/2505.18695)
 
 Greenwich Mercantile. (2026). U.S. Customs Broker Cost & Brokerage Fees 2026: $100–$250 Per Entry. [greenwich-mercantile.com/resources/guides/customs-broker-cost](https://www.greenwich-mercantile.com/resources/guides/customs-broker-cost)
 
