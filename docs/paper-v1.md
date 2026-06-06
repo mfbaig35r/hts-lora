@@ -2,7 +2,7 @@
 
 **An 8B LoRA trained on $43 of H100 compute. Served on a $700 Mac mini at 4.7 seconds per classification, 36.0% on the ATLAS public benchmark, 11pp above zero-shot GPT-5-Thinking, statistically tied with a 70B baseline when compared on the same hardware.**
 
-*By Fahad Baig, founder of [Canonical Agency](https://canonical.agency).*
+*By Fahad Baig, founder of [Canonical Agency](https://canonical.agency). Shipping HTS classification at [htsmcp.com](https://htsmcp.com).*
 
 ---
 
